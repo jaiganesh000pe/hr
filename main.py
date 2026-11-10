@@ -18,8 +18,8 @@ SCHEMA_VERSION = 1
 log = logging.getLogger("webifc")
 logging.basicConfig(level=logging.INFO)
 
-APP_PASSWORD = os.getenv("APP_PASSWORD", "")
-SECRET_KEY = os.getenv("SECRET_KEY", "")
+APP_PASSWORD = os.getenv("APP_PASSWORD", "jai")
+SECRET_KEY = os.getenv("SECRET_KEY", "7611ea4302c55014d59717eab31d79f82f16515a3cf3116ea1055210d54e1ff9")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
