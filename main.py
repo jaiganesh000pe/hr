@@ -414,6 +414,24 @@ def dashboard(db: Session = Depends(get_db)):
             "verified_contacts": n(Candidate, or_(Candidate.email_status == "Verified", Candidate.phone_status == "Verified")),
             "pipeline": {s: n(Candidate, Candidate.stage == s) for s in STAGES}}
 
+
+def coerce_jd(raw) -> JDAnalysis:
+    """Tolerant normalization: models often return strings for lists, nulls, or '5+ years' for numbers."""
+    import re
+    raw = raw if isinstance(raw, dict) else {}
+    out = {}
+    for name, f in JDAnalysis.model_fields.items():
+        v = raw.get(name)
+        if f.annotation == List[str]:
+            if isinstance(v, str): v = [x.strip() for x in re.split(r"[,;\n]", v) if x.strip()]
+            out[name] = [str(x) for x in v if x is not None] if isinstance(v, list) else []
+        elif name == "experience_years":
+            m = re.search(r"\d+(\.\d+)?", str(v)) if v is not None else None
+            out[name] = float(m.group()) if m else None
+        else:
+            out[name] = ", ".join(map(str, v)) if isinstance(v, list) else ("" if v is None else str(v))
+    return JDAnalysis(**out)
+
 # ---- JD Analyzer ----
 class JDIn(BaseModel):
     text: str = Field(min_length=30, max_length=30000)
@@ -421,8 +439,7 @@ class JDIn(BaseModel):
 @app.post("/api/jd/analyze", dependencies=[Depends(require_auth)])
 async def analyze_jd(body: JDIn, db: Session = Depends(get_db)):
     raw = await llm_json(JD_SYSTEM, body.text)
-    try: result = JDAnalysis(**raw)
-    except ValidationError as e: raise HTTPException(502, f"AI returned invalid structure: {e.error_count()} errors")
+    result = coerce_jd(raw)
     jd = JobDescription(raw_text=body.text, analysis_json=result.model_dump_json()); db.add(jd); db.commit()
     return {"id": jd.id, "analysis": result.model_dump()}
 
