@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="en" class="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>WEBIFC AI Recruiter</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>tailwind.config={darkMode:'class'}</script>
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.26.4/babel.min.js"></script>
+</head><body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"><div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useCallback}=React;
+const api=async(p,o={})=>{const r=await fetch('/api'+p,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...o,body:o.body?JSON.stringify(o.body):undefined});
+ const j=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(j.detail||'Error');e.status=r.status;throw e}return j};
+const NA=v=>v||'Not Available';
+const NAV=[['dashboard','Dashboard'],['discovery','Contractor Discovery'],['contractors','Contractors'],['candidates','All Candidates'],['jd','JD Analyzer'],['settings','Settings']];
+const card='rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4';
+const btn='px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm disabled:opacity-50';
+const inp='w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-transparent text-sm';
+
+function Login({onOk}){const[pw,setPw]=useState('');const[err,setErr]=useState('');
+ const go=async e=>{e.preventDefault();try{await api('/login',{method:'POST',body:{password:pw}});onOk()}catch(x){setErr(x.message)}};
+ return <div className="min-h-screen grid place-items-center p-4"><form onSubmit={go} className={card+' w-full max-w-sm space-y-3'}>
+ <h1 className="text-xl font-semibold">WEBIFC AI Recruiter</h1>
+ <input type="password" className={inp} placeholder="Password" value={pw} onChange={e=>setPw(e.target.value)} autoFocus/>
+ {err&&<p className="text-red-500 text-sm">{err}</p>}<button className={btn+' w-full'}>Sign in</button></form></div>}
+
+function Dashboard(){const[d,setD]=useState(null);useEffect(()=>{api('/dashboard').then(setD)},[]);
+ if(!d)return <p>Loading…</p>;
+ const t=[['Contractors',d.contractors],['Candidates',d.candidates],['Open to Work',d.open_to_work],['Verified contacts',d.verified_contacts]];
+ return <div className="space-y-4"><div className="grid grid-cols-2 md:grid-cols-4 gap-3">{t.map(([k,v])=><div key={k} className={card}><div className="text-sm opacity-70">{k}</div><div className="text-2xl font-semibold">{v}</div></div>)}</div>
+ {d.contractors+d.candidates===0&&<div className={card}>No records yet. Add a contractor to get started.</div>}</div>}
+
+function Contractors(){const[q,setQ]=useState('');const[data,setData]=useState({items:[],total:0});const[f,setF]=useState({company_name:''});
+ const load=useCallback(()=>api('/contractors?q='+encodeURIComponent(q)).then(setData),[q]);useEffect(()=>{load()},[load]);
+ const add=async e=>{e.preventDefault();await api('/contractors',{method:'POST',body:f});setF({company_name:''});load()};
+ const del=async id=>{if(confirm('Delete this contractor?')){await api('/contractors/'+id,{method:'DELETE'});load()}};
+ return <div className="space-y-4"><form onSubmit={add} className={card+' grid md:grid-cols-5 gap-2'}>
+ {['company_name','recruiter_name','email','city','state'].map(k=><input key={k} className={inp} placeholder={k.replace('_',' ')} required={k==='company_name'} value={f[k]||''} onChange={e=>setF({...f,[k]:e.target.value})}/>)}
+ <button className={btn+' md:col-span-5'}>Add contractor</button></form>
+ <input className={inp} placeholder="Search…" value={q} onChange={e=>setQ(e.target.value)}/>
+ <div className="space-y-2">{data.items.length===0&&<p className="opacity-70">No contractors yet.</p>}
+ {data.items.map(c=><div key={c.id} className={card+' flex justify-between gap-2'}><div><div className="font-medium">{c.company_name}</div>
+ <div className="text-sm opacity-70">{NA(c.recruiter_name)} · {NA(c.email)} · {c.city||'Not Available'}, {c.state||'—'} · Pool: {c.pool_size} · {c.verification_status}</div></div>
+ <button onClick={()=>del(c.id)} className="text-red-500 text-sm">Delete</button></div>)}</div></div>}
+
+function Candidates(){const[data,setData]=useState({items:[]});useEffect(()=>{api('/candidates').then(setData)},[]);
+ return <div className="space-y-2">{data.items.length===0&&<p className="opacity-70">No candidates yet.</p>}
+ {data.items.map(c=><div key={c.id} className={card}><div className="font-medium">{c.full_name} <span className="text-xs opacity-60">· {c.stage}</span></div>
+ <div className="text-sm opacity-70">{NA(c.title)} · {NA(c.email)} ({c.email_status}) · {NA(c.phone)} ({c.phone_status}) · {NA(c.city)}, {NA(c.state)}</div></div>)}</div>}
+
+function JD(){const[t,setT]=useState('');const[r,setR]=useState(null);const[err,setErr]=useState('');const[busy,setBusy]=useState(false);
+ const go=async()=>{setBusy(true);setErr('');try{setR((await api('/jd/analyze',{method:'POST',body:{text:t}})).analysis)}catch(e){setErr(e.message)}setBusy(false)};
+ return <div className="space-y-3"><textarea rows="10" className={inp} placeholder="Paste the full job description…" value={t} onChange={e=>setT(e.target.value)}/>
+ <button className={btn} disabled={busy||t.length<30} onClick={go}>{busy?'Analyzing…':'Analyze JD'}</button>{err&&<p className="text-red-500 text-sm">{err}</p>}
+ {r&&<pre className={card+' text-xs overflow-auto'}>{JSON.stringify(r,null,2)}</pre>}</div>}
+
+function Settings(){const[s,setS]=useState(null);useEffect(()=>{api('/settings/status').then(setS)},[]);if(!s)return null;
+ return <div className={card+' space-y-1 text-sm'}>{Object.entries(s).map(([k,v])=><div key={k}><b>{k}</b>: {String(v)}</div>)}
+ <p className="text-amber-500 pt-2">Reminder: download backups regularly (backup feature arrives in a later phase).</p></div>}
+
+function Soon({n}){return <div className={card}>{n} is planned for a later build phase.</div>}
+
+function App(){const[auth,setAuth]=useState(null);const[open,setOpen]=useState(false);
+ const[page,setPage]=useState(location.hash.slice(2)||'dashboard');
+ useEffect(()=>{api('/me').then(()=>setAuth(true)).catch(()=>setAuth(false));const h=()=>setPage(location.hash.slice(2)||'dashboard');addEventListener('hashchange',h);return()=>removeEventListener('hashchange',h)},[]);
+ if(auth===null)return null;if(!auth)return <Login onOk={()=>setAuth(true)}/>;
+ const P={dashboard:<Dashboard/>,contractors:<Contractors/>,candidates:<Candidates/>,jd:<JD/>,settings:<Settings/>};
+ return <div className="md:flex min-h-screen"><button className="md:hidden p-3" onClick={()=>setOpen(!open)}>☰ Menu</button>
+ <nav className={(open?'block':'hidden')+' md:block w-full md:w-60 p-3 space-y-1 border-r border-slate-200 dark:border-slate-800'}>
+ {NAV.map(([k,l])=><a key={k} href={'#/'+k} onClick={()=>setOpen(false)} className={'block px-3 py-2 rounded-lg text-sm '+(page===k?'bg-blue-600 text-white':'hover:bg-slate-200 dark:hover:bg-slate-800')+(k==='discovery'||k==='contractors'?' font-semibold':'')}>{l}</a>)}
+ <button className="text-xs opacity-70 px-3 pt-3" onClick={()=>document.documentElement.classList.toggle('dark')}>Toggle theme</button>
+ <button className="text-xs opacity-70 px-3 block" onClick={async()=>{await api('/logout',{method:'POST'});setAuth(false)}}>Log out</button></nav>
+ <main className="flex-1 p-4">{P[page]||<Soon n={page}/>}</main></div>}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>
